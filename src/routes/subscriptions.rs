@@ -13,7 +13,7 @@ use crate::{
 };
 
 #[derive(serde::Deserialize)]
-pub(crate) struct FormData {
+pub struct FormData {
     email: String,
     name: String,
 }
@@ -59,7 +59,7 @@ impl ResponseError for SubscribeError {
         subscriber_name= %form.name
     )
 )]
-pub(crate) async fn subscribe(
+pub async fn subscribe(
     form: web::Form<FormData>,
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
@@ -191,7 +191,7 @@ fn generate_subscription_token() -> String {
     name = "Saving new subscriber details in the database"
     skip(transaction, new_subsciber)
 )]
-pub(crate) async fn insert_subscriber(
+pub async fn insert_subscriber(
     transaction: &mut Transaction<'_, Postgres>,
     new_subsciber: &NewSubscriber,
 ) -> Result<Uuid, sqlx::Error> {
