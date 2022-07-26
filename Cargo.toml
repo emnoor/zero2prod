@@ -19,7 +19,7 @@ serde = { version = "1", features = ["derive"] }
 serde-aux = "3"
 config = { version = "0.13", default-features = false, features = ["toml", "yaml"] }
 chrono = { version = "0.4", default-features = false }
-uuid = { version = "1.1", features = ["v4"] }
+uuid = { version = "1.1", features = ["v4", "serde"] }
 tracing = { version = "0.1", features =["log"] }
 tracing-subscriber = { version = "0.3", features =["registry", "env-filter"] }
 tracing-bunyan-formatter = "0.3"
@@ -36,6 +36,7 @@ anyhow = "1"
 base64 = "0.13"
 argon2 = { version = "0.4.1", features = ["std"] }
 actix-web-flash-messages = { version = "0.3", features = ["cookies"] }
+serde_json = "1"
 
 [dependencies.sqlx]
 version = "0.6.0"
@@ -50,12 +51,16 @@ features = [
     "offline"
 ]
 
+[dependencies.actix-session]
+git = "https://github.com/actix/actix-extras"
+branch = "master"
+features = ["redis-rs-tls-session"]
+
 [dev-dependencies]
 claim = "0.5"
 fake = "~2.3"
 quickcheck = "0.9"
 quickcheck_macros = "0.9"
 wiremock = "0.5"
-serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt"] }
 linkify = "0.8"
