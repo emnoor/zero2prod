@@ -1,4 +1,4 @@
-use crate::routes::spawn_blocking_with_tracing;
+use crate::telemetry::spawn_blocking_with_tracing;
 use anyhow::Context;
 use argon2::{
     password_hash::SaltString, Algorithm, Argon2, Params, PasswordHash, PasswordHasher,
