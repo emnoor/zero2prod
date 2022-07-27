@@ -1,5 +1,6 @@
 use actix_web::{web, HttpResponse};
 use actix_web_flash_messages::FlashMessage;
+use anyhow::Context;
 use sqlx::PgPool;
 
 use crate::{
@@ -8,7 +9,7 @@ use crate::{
     utils::{e500, see_other},
 };
 
-#[tracing::instrument(name = "Submit Newsletter Issue", skip(form, pool, email_client))]
+#[tracing::instrument(name = "Publish a newsletter issue", skip(form, pool, email_client))]
 pub async fn submit_newsletter(
     form: web::Form<FormData>,
     pool: web::Data<PgPool>,
@@ -27,19 +28,22 @@ pub async fn submit_newsletter(
                         &form.0.text_content,
                     )
                     .await
+                    .with_context(|| {
+                        format!("Failed to send newsletter issue to {}", subscriber.email)
+                    })
                     .map_err(e500)?;
             }
             Err(error) => {
                 tracing::warn!(
                     error.cause_chain = ?error,
-                    "Skipping a confirmed subscriber. \
-                    Their stored contact details are invalid",
+                    error.message = %error,
+                    "Skipping a confirmed subscriber. Their stored contact details are invalid",
                 );
             }
         }
     }
 
-    FlashMessage::error("The newsletter issue has been published!").send();
+    FlashMessage::info("The newsletter issue has been published!").send();
     Ok(see_other("/admin/newsletters"))
 }
 
