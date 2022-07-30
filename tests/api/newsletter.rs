@@ -31,12 +31,12 @@ async fn you_must_be_logged_in_to_submit_newsletter() {
 
     // Act
     let response = app
-        .post_submit_newsletter(&serde_json::json!({
-            "title": Uuid::new_v4().to_string(),
-            "text_content": Uuid::new_v4().to_string(),
-            "html_content": Uuid::new_v4().to_string(),
-            "idempotency_key": uuid::Uuid::new_v4().to_string(),
-        }))
+        .post_submit_newsletter(&[
+            ("title", Uuid::new_v4().to_string()),
+            ("text_content", Uuid::new_v4().to_string()),
+            ("html_content", Uuid::new_v4().to_string()),
+            ("idempotency_key", uuid::Uuid::new_v4().to_string()),
+        ])
         .await;
 
     // Assert
@@ -48,6 +48,7 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
     // Arrange
     let app = spawn_app().await;
     create_unconfirmed_subscriber(&app).await;
+    app.test_user.login(&app).await;
 
     Mock::given(any())
         .respond_with(ResponseTemplate::new(200))
@@ -55,24 +56,17 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
         .mount(&app.email_server)
         .await;
 
-    // Act - Part 1 - Login
-    app.post_login(&serde_json::json!({
-        "username": &app.test_user.username,
-        "password": &app.test_user.password,
-    }))
-    .await;
-
-    // Act - Part 2 - Submit newsletter
-    let newsletter_request_body = serde_json::json!({
-        "title": "Newsletter title",
-        "text_content": "Newsletter body as plain text",
-        "html_content": "<p>Newsletter body as HTML</p>",
-        "idempotency_key": uuid::Uuid::new_v4().to_string(),
-    });
+    // Act - Part 1 - Submit newsletter
+    let newsletter_request_body = [
+        ("title", "Newsletter title"),
+        ("text_content", "Newsletter body as plain text"),
+        ("html_content", "<p>Newsletter body as HTML</p>"),
+        ("idempotency_key", &uuid::Uuid::new_v4().to_string()),
+    ];
     let response = app.post_submit_newsletter(&newsletter_request_body).await;
     assert_is_redirect_to(&response, "/admin/newsletters");
 
-    // Act - Part 3 - Follow the redirect
+    // Act - Part 2 - Follow the redirect
     let html_page = app.get_submit_newsletter_form_html().await;
     assert!(html_page.contains(
         "<p><i>The newsletter issue has been accepted - emails will go out shortly.</i></p>"
@@ -85,11 +79,7 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
 async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
     let name: String = Name().fake();
     let email: String = SafeEmail().fake();
-    let body = serde_urlencoded::to_string(&serde_json::json!({
-        "name": name,
-        "email": email,
-    }))
-    .unwrap();
+    let body = serde_urlencoded::to_string(&[("name", name), ("email", email)]).unwrap();
 
     let _mock_guard = Mock::given(path("/email"))
         .respond_with(ResponseTemplate::new(200))
@@ -126,6 +116,7 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
     // Arrange
     let app = spawn_app().await;
     create_confirmed_subscriber(&app).await;
+    app.test_user.login(&app).await;
 
     Mock::given(path("/email"))
         .and(method("POST"))
@@ -134,24 +125,17 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
         .mount(&app.email_server)
         .await;
 
-    // Act - Part 1 - Login
-    app.post_login(&serde_json::json!({
-        "username": &app.test_user.username,
-        "password": &app.test_user.password,
-    }))
-    .await;
-
-    // Act - Part 2 - Submit newsletter
-    let newsletter_request_body = serde_json::json!({
-        "title": "Newsletter title",
-        "text_content": "Newsletter body as plain text",
-        "html_content": "<p>Newsletter body as HTML</p>",
-        "idempotency_key": uuid::Uuid::new_v4().to_string(),
-    });
+    // Act - Part 1 - Submit newsletter
+    let newsletter_request_body = [
+        ("title", "Newsletter title"),
+        ("text_content", "Newsletter body as plain text"),
+        ("html_content", "<p>Newsletter body as HTML</p>"),
+        ("idempotency_key", &uuid::Uuid::new_v4().to_string()),
+    ];
     let response = app.post_submit_newsletter(&newsletter_request_body).await;
     assert_is_redirect_to(&response, "/admin/newsletters");
 
-    // Act - Part 3 - Follow the redirect
+    // Act - Part 2 - Follow the redirect
     let html_page = app.get_submit_newsletter_form_html().await;
     assert!(html_page.contains(
         "<p><i>The newsletter issue has been accepted - emails will go out shortly.</i></p>"
@@ -166,11 +150,7 @@ async fn newsletter_creation_is_idempotent() {
     // Arrange
     let app = spawn_app().await;
     create_confirmed_subscriber(&app).await;
-    app.post_login(&serde_json::json!({
-        "username": &app.test_user.username,
-        "password": &app.test_user.password,
-    }))
-    .await;
+    app.test_user.login(&app).await;
 
     Mock::given(path("/email"))
         .and(method("POST"))
@@ -180,12 +160,12 @@ async fn newsletter_creation_is_idempotent() {
         .await;
 
     // Act - Part 1 - Submit newsletter form
-    let newsletter_request_body = serde_json::json!({
-        "title": "Newsletter title",
-        "text_content": "Newsletter body as plain text",
-        "html_content": "<p>Newsletter body as HTML</p>",
-        "idempotency_key": uuid::Uuid::new_v4().to_string(),
-    });
+    let newsletter_request_body = [
+        ("title", "Newsletter title"),
+        ("text_content", "Newsletter body as plain text"),
+        ("html_content", "<p>Newsletter body as HTML</p>"),
+        ("idempotency_key", &uuid::Uuid::new_v4().to_string()),
+    ];
     let response = app.post_submit_newsletter(&newsletter_request_body).await;
     assert_is_redirect_to(&response, "/admin/newsletters");
 
@@ -214,11 +194,7 @@ async fn concurrent_form_submission_is_handled_gracefully() {
     // Arrange
     let app = spawn_app().await;
     create_confirmed_subscriber(&app).await;
-    app.post_login(&serde_json::json!({
-        "username": &app.test_user.username,
-        "password": &app.test_user.password,
-    }))
-    .await;
+    app.test_user.login(&app).await;
 
     Mock::given(path("/email"))
         .and(method("POST"))
@@ -228,12 +204,12 @@ async fn concurrent_form_submission_is_handled_gracefully() {
         .await;
 
     // Act - Submit two newsletter forms concurrently
-    let newsletter_request_body = serde_json::json!({
-        "title": "Newsletter title",
-        "text_content": "Newsletter body as plain text",
-        "html_content": "<p>Newsletter body as HTML</p>",
-        "idempotency_key": uuid::Uuid::new_v4().to_string(),
-    });
+    let newsletter_request_body = [
+        ("title", "Newsletter title"),
+        ("text_content", "Newsletter body as plain text"),
+        ("html_content", "<p>Newsletter body as HTML</p>"),
+        ("idempotency_key", &uuid::Uuid::new_v4().to_string()),
+    ];
     let response1 = app.post_submit_newsletter(&newsletter_request_body);
     let response2 = app.post_submit_newsletter(&newsletter_request_body);
     let (response1, response2) = tokio::join!(response1, response2);

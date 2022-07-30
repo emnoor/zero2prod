@@ -285,6 +285,11 @@ impl TestUser {
         .await
         .expect("Failed to store test user.");
     }
+
+    pub async fn login(&self, app: &TestApp) -> reqwest::Response {
+        app.post_login(&[("username", &self.username), ("password", &self.password)])
+            .await
+    }
 }
 
 pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {

@@ -7,10 +7,10 @@ async fn an_error_flash_message_is_set_on_failure() {
     let app = spawn_app().await;
 
     // Act - Part 1 - try to login
-    let login_body = serde_json::json!({
-        "username": "random-username",
-        "password": "random-password"
-    });
+    let login_body = [
+        ("username", "random-username"),
+        ("password", "random-password"),
+    ];
     let response = app.post_login(&login_body).await;
 
     // Assert
@@ -31,10 +31,10 @@ async fn redirect_to_admin_dashboad_after_login_success() {
     let app = spawn_app().await;
 
     // Act - Part 1 - Login
-    let login_body = serde_json::json!({
-        "username": &app.test_user.username,
-        "password": &app.test_user.password
-    });
+    let login_body = [
+        ("username", &app.test_user.username),
+        ("password", &app.test_user.password),
+    ];
     let response = app.post_login(&login_body).await;
     // Assert
     assert_is_redirect_to(&response, "/admin/dashboard");
