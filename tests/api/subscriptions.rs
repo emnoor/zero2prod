@@ -8,7 +8,7 @@ use wiremock::{
 async fn subscribe_returns_a_200_for_valid_form_data() {
     // Arrange
     let app = spawn_app().await;
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    let body = [("name", "le guin"), ("email", "ursula_le_guin@gmail.com")];
 
     Mock::given(path("/email"))
         .and(method("POST"))
@@ -17,7 +17,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .await;
 
     // Act
-    let response = app.post_subscriptions(body.into()).await;
+    let response = app.post_subscriptions(&body).await;
 
     // Assert
     assert_eq!(200, response.status().as_u16());
@@ -27,7 +27,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 async fn subscribe_persists_the_new_subscriber() {
     // Arrange
     let app = spawn_app().await;
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    let body = [("name", "le guin"), ("email", "ursula_le_guin@gmail.com")];
 
     Mock::given(path("/email"))
         .and(method("POST"))
@@ -36,7 +36,7 @@ async fn subscribe_persists_the_new_subscriber() {
         .await;
 
     // Act
-    app.post_subscriptions(body.into()).await;
+    app.post_subscriptions(&body).await;
 
     // Assert
     let saved = sqlx::query!("SELECT email, name, status FROM subscriptions")
@@ -53,13 +53,16 @@ async fn subscribe_persists_the_new_subscriber() {
 async fn subscribe_returns_a_400_when_data_is_missing() {
     let app = spawn_app().await;
     let test_cases = vec![
-        ("name=le%20guin", "missing the email"),
-        ("email=ursula_le_guin%40gmail.com", "missing the name"),
-        ("", "missing both name and email"),
+        (vec![("name", "le guin")], "missing the email"),
+        (
+            vec![("email", "ursula_le_guin@gmail.com")],
+            "missing the name",
+        ),
+        (vec![], "missing both name and email"),
     ];
 
     for (invalid_body, error_message) in test_cases {
-        let response = app.post_subscriptions(invalid_body.into()).await;
+        let response = app.post_subscriptions(&invalid_body).await;
 
         assert_eq!(
             400,
@@ -74,13 +77,19 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
 async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
     let app = spawn_app().await;
     let test_cases = vec![
-        ("name=&email=ursula_le_guin%40gmail.com", "empty name"),
-        ("name=Ursula&email=", "empty email"),
-        ("name=Ursula&email=definitely-not-an-email", "invalid email"),
+        (
+            [("name", ""), ("email", "ursula_le_guin@gmail.com")],
+            "empty name",
+        ),
+        ([("name", "Ursula"), ("email", "")], "empty email"),
+        (
+            [("name", "Ursula"), ("email", "definitely-not-an-email")],
+            "invalid email",
+        ),
     ];
 
     for (body, description) in test_cases {
-        let response = app.post_subscriptions(body.into()).await;
+        let response = app.post_subscriptions(&body).await;
 
         assert_eq!(
             400,
@@ -95,7 +104,7 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
 async fn subscribe_sends_a_confirmation_email_for_valid_data() {
     // Arrange
     let app = spawn_app().await;
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    let body = [("name", "le guin"), ("email", "ursula_le_guin@gmail.com")];
 
     Mock::given(path("/email"))
         .and(method("POST"))
@@ -105,7 +114,7 @@ async fn subscribe_sends_a_confirmation_email_for_valid_data() {
         .await;
 
     // Act
-    app.post_subscriptions(body.into()).await;
+    app.post_subscriptions(&body).await;
 
     // Assert
     // Mock asserts on drop
@@ -115,7 +124,7 @@ async fn subscribe_sends_a_confirmation_email_for_valid_data() {
 async fn subscribe_sends_a_confirmation_email_with_a_link() {
     // Arrange
     let app = spawn_app().await;
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    let body = [("name", "le guin"), ("email", "ursula_le_guin@gmail.com")];
 
     Mock::given(path("/email"))
         .and(method("POST"))
@@ -124,7 +133,7 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
         .await;
 
     // Act
-    app.post_subscriptions(body.into()).await;
+    app.post_subscriptions(&body).await;
 
     // Assert
     let email_request = &app.email_server.received_requests().await.unwrap()[0];
@@ -138,7 +147,7 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
 async fn subscribe_fails_if_there_is_a_fatal_database_error() {
     // Arrange
     let app = spawn_app().await;
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    let body = [("name", "le guin"), ("email", "ursula_le_guin@gmail.com")];
     // Sabotage the database
     sqlx::query!("ALTER TABLE subscriptions DROP COLUMN email;")
         .execute(&app.db_pool)
@@ -146,7 +155,7 @@ async fn subscribe_fails_if_there_is_a_fatal_database_error() {
         .unwrap();
 
     // Act
-    let response = app.post_subscriptions(body.into()).await;
+    let response = app.post_subscriptions(&body).await;
 
     // Assert
     assert_eq!(response.status().as_u16(), 500);
