@@ -5,6 +5,8 @@ use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
+use zero2prod::email_client::EmailClient;
+use zero2prod::issue_delivery_worker::{try_execute_task, ExecutionOutcome};
 use zero2prod::startup::{get_connection_pool, Application};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 
@@ -28,6 +30,7 @@ pub struct TestApp {
     pub email_server: MockServer,
     pub test_user: TestUser,
     pub api_client: reqwest::Client,
+    pub email_client: EmailClient,
 }
 
 impl TestApp {
@@ -159,6 +162,18 @@ impl TestApp {
             .await
             .expect("Failed to execute request.")
     }
+
+    pub async fn dispatch_all_pending_emails(&self) {
+        loop {
+            if let ExecutionOutcome::EmptyQueue =
+                try_execute_task(&self.db_pool, &self.email_client)
+                    .await
+                    .unwrap()
+            {
+                break;
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -199,6 +214,8 @@ pub async fn spawn_app() -> TestApp {
         .build()
         .unwrap();
 
+    let email_client = configuration.email_client.client();
+
     TestApp {
         address,
         port,
@@ -206,6 +223,7 @@ pub async fn spawn_app() -> TestApp {
         email_server,
         test_user,
         api_client,
+        email_client,
     }
 }
 

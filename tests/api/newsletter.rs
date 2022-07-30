@@ -1,3 +1,9 @@
+use std::time::Duration;
+
+use fake::{
+    faker::{internet::en::SafeEmail, name::en::Name},
+    Fake,
+};
 use uuid::Uuid;
 use wiremock::{
     matchers::{any, method, path},
@@ -68,13 +74,22 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
 
     // Act - Part 3 - Follow the redirect
     let html_page = app.get_submit_newsletter_form_html().await;
-    assert!(html_page.contains("<p><i>The newsletter issue has been published!</i></p>"));
+    assert!(html_page.contains(
+        "<p><i>The newsletter issue has been accepted - emails will go out shortly.</i></p>"
+    ));
 
+    app.dispatch_all_pending_emails().await;
     // Mock verifies on Drop that we haven't sent the newsletter email
 }
 
 async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    let name: String = Name().fake();
+    let email: String = SafeEmail().fake();
+    let body = serde_urlencoded::to_string(&serde_json::json!({
+        "name": name,
+        "email": email,
+    }))
+    .unwrap();
 
     let _mock_guard = Mock::given(path("/email"))
         .respond_with(ResponseTemplate::new(200))
@@ -138,8 +153,11 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
 
     // Act - Part 3 - Follow the redirect
     let html_page = app.get_submit_newsletter_form_html().await;
-    assert!(html_page.contains("<p><i>The newsletter issue has been published!</i></p>"));
+    assert!(html_page.contains(
+        "<p><i>The newsletter issue has been accepted - emails will go out shortly.</i></p>"
+    ));
 
+    app.dispatch_all_pending_emails().await;
     // Mock verifies on Drop that we have sent the newsletter email
 }
 
@@ -173,7 +191,9 @@ async fn newsletter_creation_is_idempotent() {
 
     // Act - Part 2 - Follow the redirect
     let html_page = app.get_submit_newsletter_form_html().await;
-    assert!(html_page.contains("<p><i>The newsletter issue has been published!</i></p>"));
+    assert!(html_page.contains(
+        "<p><i>The newsletter issue has been accepted - emails will go out shortly.</i></p>"
+    ));
 
     // Act - Phase 3 - Submit newsletter form **again**
     let response = app.post_submit_newsletter(&newsletter_request_body).await;
@@ -181,8 +201,11 @@ async fn newsletter_creation_is_idempotent() {
 
     // Act - Part 4 - Follow the redirect
     let html_page = app.get_submit_newsletter_form_html().await;
-    assert!(html_page.contains("<p><i>The newsletter issue has been published!</i></p>"));
+    assert!(html_page.contains(
+        "<p><i>The newsletter issue has been accepted - emails will go out shortly.</i></p>"
+    ));
 
+    app.dispatch_all_pending_emails().await;
     // Mock verifies on Drop that we have sent the newsletter email **once**
 }
 
@@ -221,6 +244,6 @@ async fn concurrent_form_submission_is_handled_gracefully() {
         response2.text().await.unwrap()
     );
 
+    app.dispatch_all_pending_emails().await;
     // Mock verifies on Drop that we have sent the newsletteremail **once**
 }
-
